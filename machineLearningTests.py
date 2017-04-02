@@ -1,4 +1,4 @@
-import MachineLearning as ml
+import machineLearning as ml
 import numpy as np
 
 def testEuclidDistance():
