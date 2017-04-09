@@ -46,7 +46,9 @@ class Layer:
 
     #TODO initialize the bias independent from the weights
     def __init__(self, num_input, num_hidden_units, activation):
-        self.weights = np.random.normal(0, 0.5, (num_hidden_units, num_input + 1))
+        print(2 / num_input)
+        self.weights = np.random.normal(0, 2 / (num_input), (num_hidden_units, num_input + 1)) #variance after bengio glorot
+       # self.weights[:, 0] = np.zeros(num_hidden_units)
         self.output_before_ac = np.zeros(num_hidden_units + 1)
         self.input = np.zeros(num_input + 1)
         self.activation = activation
@@ -133,22 +135,29 @@ def relu_diff(vector):
             relu_vector[i] = 0
     return relu_vector
 
+def sigmoid(vector):
+    return 0.5 * (1 +  np.tanh(vector / 2))
+
+def sigmoid_diff(vector):
+    return sigmoid(vector) * (1 - sigmoid(vector))
+
+
 def test():
     #interval: [-1,1]
     number_of_samples = 100
     x_values = np.array([np.array([(x / number_of_samples)]) for x in range(-number_of_samples, number_of_samples)])
     y_values = np.array([np.array([np.sin(np.pi * x / number_of_samples)]) for x in range(-number_of_samples, number_of_samples)])
 
-    input_layer = Layer(1, 20, ActivationFunction(relu, relu_diff))
-    hidden_1 = Layer(20, 20, ActivationFunction(relu, relu_diff))
-    hidden_2 = Layer(4, 1, ActivationFunction(relu, relu_diff))
-    output_layer = Layer(20, 1, ActivationFunction(lambda x: x, lambda x: 1))
+    input_layer = Layer(1, 10, ActivationFunction(sigmoid, sigmoid_diff))
+    hidden_1 = Layer(10, 10, ActivationFunction(sigmoid, sigmoid_diff))
+    #hidden_2 = Layer(10, 10, ActivationFunction(sigmoid, sigmoid_diff))
+    output_layer = Layer(10, 1, ActivationFunction(lambda x: x, lambda x: 1))
 
-    layers = np.array([input_layer, hidden_1,  output_layer])
+    layers = np.array([input_layer, hidden_1, output_layer])
 
     net = NeuralNet(layers, CostFunction(mse, lambda z, y: z - y))
 
-    net.train(x_values, y_values, 350, 0.001)
+    net.train(x_values, y_values, 350, 0.1)
 
     predicted_y = net.predict(x_values)
     plt.plot(x_values, predicted_y)
