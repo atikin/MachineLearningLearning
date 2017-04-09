@@ -19,6 +19,7 @@ class CostFunction:
         return self.function_diff(x, y)
 
 
+#todo make this an interface
 class ActivationFunction:
     function: object
 
@@ -45,32 +46,25 @@ class Layer:
 
     #TODO initialize the bias independent from the weights
     def __init__(self, num_input, num_hidden_units, activation):
-        self.weights = np.random.normal(0, 0.3, (num_hidden_units, num_input + 1))
-        self.output_before_ac = np.zeros(num_hidden_units)
+        self.weights = np.random.normal(0, 0.5, (num_hidden_units, num_input + 1))
+        self.output_before_ac = np.zeros(num_hidden_units + 1)
         self.input = np.zeros(num_input + 1)
         self.activation = activation
 
     #for the moment just one vector at a time
-    #TODO incorporate bias in matrix and input vector
-    def forward(self, sample): #should work
+    def forward(self, sample):
         self.input = self.prepend_one(sample)
         self.output_before_ac = self.weights.dot(self.input)
         return self.activation.eval(self.output_before_ac)
 
     #takes error from next layer and calcs and updates weights update
-    def backward(self, error, learn_rate, is_output_layer):
-        debug1 = self.activation.eval_diff(self.output_before_ac)
+    def backward(self, error, learn_rate):
         layer_error = self.activation.eval_diff(self.output_before_ac) * error
-        if not is_output_layer:
-            debug3 = np.sum(self.weights[:, 1:], axis=1)
-            layer_error = layer_error * np.sum(self.weights[:, 1:], axis=1) #TODO test wether this is a sum of vectors in right direction
+        layer_error_new = self.weights[:, 1:].T.dot(layer_error)
+        self.weights = self.weights + [learn_rate * x for x in np.asarray(np.outer(layer_error, self.input))]
+        return layer_error_new
 
-        debug = np.outer(error, self.input)
-        debug2 = [learn_rate * x for x in np.asarray(np.outer(error, self.input))]
-        self.weights = self.weights + [learn_rate * x for x in np.asarray(np.outer(error, self.input))] #TODO test wether this results in a matrix
-        return layer_error
-
-    def prepend_one(self, sample): #works
+    def prepend_one(self, sample):
         return np.array(np.append([1], sample))
 
 
@@ -89,21 +83,23 @@ class NeuralNet:
 
         while epochs > 0:
 
+            permutation = np.random.permutation(data.shape[0])
+            shuffled_data = np.array([data[i] for i in permutation])
+            shuffled_labels = np.array([labels[i] for i in permutation])
             gesamt_error = 0
             epochs -= 1
-            out_test = 0
-            for i, sample in enumerate(data):
+            for i, sample in enumerate(shuffled_data):
                 out = sample
                 for j, layer in enumerate(self.layers):
                     out = layer.forward(out)
-                loss = np.sum(self.cost_function.function(labels[i], out))
-                out_test = out
-                error = self.cost_function.function_diff(labels[i], out) #this cant work
+
+                loss = np.sum(self.cost_function.function(shuffled_labels[i], out))
                 gesamt_error += loss
-                is_output_layer = True
+
+                error = self.cost_function.function_diff(shuffled_labels[i], out)
+
                 for layer in reversed(self.layers):
-                    error = layer.backward(error, learning_rate, is_output_layer)
-                    is_output_layer = False
+                    error = layer.backward(error, learning_rate)
             if epoch % 10 == 0:
                 print("Epoche {:d} loss: {:f}".format(epoch, gesamt_error))
             epoch +=1
@@ -138,20 +134,21 @@ def relu_diff(vector):
     return relu_vector
 
 def test():
-    #interval: [0,1]
-    number_of_samples = 200
-    x_values = np.array([np.array([(x / number_of_samples)]) for x in range(number_of_samples)])
-    y_values = np.array([np.array([((x / number_of_samples)**2 )]) for x in range(number_of_samples)])
+    #interval: [-1,1]
+    number_of_samples = 100
+    x_values = np.array([np.array([(x / number_of_samples)]) for x in range(-number_of_samples, number_of_samples)])
+    y_values = np.array([np.array([np.sin(np.pi * x / number_of_samples)]) for x in range(-number_of_samples, number_of_samples)])
 
-    input_layer = Layer(1, 101, ActivationFunction(relu, relu_diff))
-    hidden_1 = Layer(101, 101, ActivationFunction(relu, relu_diff))
-    output_layer = Layer(101, 1, ActivationFunction(lambda x: x, lambda x: 1))
+    input_layer = Layer(1, 20, ActivationFunction(relu, relu_diff))
+    hidden_1 = Layer(20, 20, ActivationFunction(relu, relu_diff))
+    hidden_2 = Layer(4, 1, ActivationFunction(relu, relu_diff))
+    output_layer = Layer(20, 1, ActivationFunction(lambda x: x, lambda x: 1))
 
-    layers = np.array([input_layer, output_layer])
+    layers = np.array([input_layer, hidden_1,  output_layer])
 
     net = NeuralNet(layers, CostFunction(mse, lambda z, y: z - y))
 
-    net.train(x_values, y_values, 150, 0.01)
+    net.train(x_values, y_values, 350, 0.001)
 
     predicted_y = net.predict(x_values)
     plt.plot(x_values, predicted_y)
